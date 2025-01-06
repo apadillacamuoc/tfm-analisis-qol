@@ -1,0 +1,961 @@
+---
+title: "Reporte estadístico de calidad de vida"
+author: "Alan Padilla Campoy"
+date: "`r Sys.Date()`"
+output: 
+  pdf_document:
+    toc: true
+    extra_dependencies: ["float"]
+---
+
+```{r inputs, echo=FALSE, include=FALSE}
+# Escribe aquí el nombre del archivo .xlsx con el que quieras trabajar.
+
+archivo <- "data.xlsx"
+
+# Escribe aquí el nombre de la variable dependiente que quieras analizar. Puedes consultar la lista en README.txt
+
+base <- "cf"
+
+# Escribe aquí el nombre de tres variables categoricas independientes que sean de tu interés. Puedes consultar la lista en README.txt
+
+variable.exploracion.1 <- "alcohol" 
+variable.exploracion.2 <- "contraceptive_kind"
+variable.exploracion.3 <- "education"
+```
+
+```{r librerias, echo=FALSE, include=FALSE}
+library(ggplot2)  # Para visualización de datos
+library(readxl)  # Para leer archivos de Excel
+library(dplyr)  # Para manipular y analizar datos
+library(data.table)  # Para manejar y manipular datos en forma eficiente
+```
+```{r lectura_data, echo=FALSE, include=FALSE}
+data <- read_excel(archivo)
+```
+```{r funcion_limpieza_888, echo=FALSE, include=FALSE}
+reemplazar <- function(data) {
+  # Reemplazar 888 con 8 y 999 con 9 en todas las columnas numéricas
+  data[] <- lapply(data, function(x) {
+    # Reemplazar valores solo en columnas numéricas
+    if (is.numeric(x)) {
+      x[x == 888] <- 8
+      x[x == 999] <- 9
+    }
+    return(x)
+  })
+  
+  return(data)
+}
+```
+```{r funcion_categorizar, echo=FALSE, include=FALSE}
+categorizar <- function(data, nombre_columna, etiquetas, descripcion = NULL) {
+  # Verificar si la columna existe en el conjunto de datos
+  if (!nombre_columna %in% colnames(data)) {
+    stop("La columna especificada no existe en el conjunto de datos.")
+  }
+  
+  # Convertir la columna a un factor si no lo es ya
+  data[[nombre_columna]] <- as.factor(data[[nombre_columna]])
+  
+  # Obtener los niveles actuales de la columna tipo factor
+  niveles_actuales <- levels(data[[nombre_columna]])
+  
+  # Si el número de niveles es menor que el número de etiquetas nuevas,
+  # solo asignar etiquetas nuevas a los niveles existentes sin desplazar etiquetas
+  if (length(etiquetas) != length(niveles_actuales)) {
+    message("Advertencia: El número de etiquetas nuevas no coincide con el número de niveles actuales.")
+    
+    # Ajustar las etiquetas nuevas para que coincidan con el número de niveles actuales
+    if (length(etiquetas) > length(niveles_actuales)) {
+      etiquetas <- etiquetas[1:length(niveles_actuales)]
+    }
+    
+    # Asignar las etiquetas nuevas a los niveles del factor
+    levels(data[[nombre_columna]]) <- etiquetas
+  } else {
+    # Si el número de etiquetas y niveles coincide, asignar directamente
+    levels(data[[nombre_columna]]) <- etiquetas
+  }
+  
+  # Agregar descripción como atributo si se proporciona
+  if (!is.null(descripcion)) {
+    attr(data[[nombre_columna]], "descripcion") <- descripcion
+  }
+  
+  return(data)
+}
+
+data <- categorizar(data, "maritial_status", c("Soltera", "Casada/En una relación", "Divorciada/Separada", "Viuda"), descripcion = "Estado civil de la paciente")
+data <- categorizar(data, "education", 
+                    c("Bajo", "Medio", "Alto"), 
+                    descripcion = "Nivel educativo del paciente")
+data <- categorizar(data, "diagnosis", 
+                    c("Cáncer de mama", "CDIS", "Fibroadenoma", "Otras enf. de la mama"), 
+                    descripcion = "Diagnóstico de la enfermedad mamaria para el reclutamiento")
+data <- categorizar(data, "alcohol", 
+                    c("Ninguno", "Ocasionalmente", "Semanalmente", "Diariamente"), 
+                    descripcion = "Frecuencia de consumo de alcohol")
+data <- categorizar(data, "smokingstatus", 
+                    c("No", "Si", "Exfumador"), 
+                    descripcion = "Estado de tabaquismo del paciente")
+data <- categorizar(data, "bust", 
+                    c("65", "70", "75", "80", "85", "90", "95", "100", "105", "110", "115", "120", "125"), 
+                    descripcion = "Medida del busto en cm")
+data <- categorizar(data, "cupsize", 
+                    c("AA", "A", "B", "C", "D", "E", "F", "G", "H"), 
+                    descripcion = "Talla de copa del sostén")
+data <- categorizar(data, "menopause_yn", 
+                    c("No", "Si"), 
+                    descripcion = "Estado de menopausia del paciente")
+data <- categorizar(data, "pregnancy_number", 
+                    c("0", "1", "2", "3", "4", "5", "6", "7", "más de 7"), 
+                    descripcion = "Número de embarazos")
+data <- categorizar(data, "comorb_none", 
+                    c("No", "Si"), 
+                    descripcion = "El paciente no presenta comorbilidades")
+data <- categorizar(data, "comorb_heart", 
+                    c("No", "Si"), 
+                    descripcion = "Comorbilidad: enfermedades cardíacas (p. ej., angina de pecho, infarto, insuficiencia cardíaca)")
+data <- categorizar(data, "comorb_hypertension", 
+                    c("No", "Si"), 
+                    descripcion = "Comorbilidad: hipertensión arterial")
+data <- categorizar(data, "comorb_paod", 
+                    c("No", "Si"), 
+                    descripcion = "Comorbilidad: enfermedad arterial periférica")
+data <- categorizar(data, "comorb_lung", 
+                    c("No", "Si"), 
+                    descripcion = "Comorbilidad: enfermedades pulmonares (p. ej., asma, bronquitis crónica, enfisema)")
+data <- categorizar(data, "comorb_diabetes", 
+                    c("No", "Si"), 
+                    descripcion = "Comorbilidad: diabetes")
+data <- categorizar(data, "comorb_kidneys", 
+                    c("No", "Si"), 
+                    descripcion = "Comorbilidad: enfermedad renal")
+data <- categorizar(data, "comorb_liver", 
+                    c("No", "Si"), 
+                    descripcion = "Comorbilidad: enfermedades hepáticas")
+data <- categorizar(data, "comorb_stroke", 
+                    c("No", "Si"), 
+                    descripcion = "Comorbilidad: secuelas de un accidente cerebrovascular")
+data <- categorizar(data, "comorb_neurological", 
+                    c("No", "Si"), 
+                    descripcion = "Comorbilidad: enfermedades neurológicas (p. ej., Parkinson, esclerosis múltiple)")
+data <- categorizar(data, "comorb_cancerlast5years", 
+                    c("No", "Si"), 
+                    descripcion = "Cáncer en los últimos cinco años")
+data <- categorizar(data, "comorb_depression", 
+                    c("No", "Si"), 
+                    descripcion = "Comorbilidad: depresión")
+data <- categorizar(data, "comorb_gastrointestinal", 
+                    c("No", "Si"), 
+                    descripcion = "Comorbilidad: enfermedades gastrointestinales")
+data <- categorizar(data, "comorb_endometriosis", 
+                    c("No", "Si"), 
+                    descripcion = "Comorbilidad: endometriosis")
+data <- categorizar(data, "comorb_arthritis", 
+                    c("No", "Si"), 
+                    descripcion = "Comorbilidad: artritis")
+data <- categorizar(data, "comorb_incontinence", 
+                    c("No", "Si"), 
+                    descripcion = "Comorbilidad: incontinencia urinaria")
+data <- categorizar(data, "comorb_uti", 
+                    c("No", "Si"), 
+                    descripcion = "Comorbilidad: infecciones del tracto urinario")
+data <- categorizar(data, "cancer_breast", 
+                    c("No", "Si"), 
+                    descripcion = "Cáncer de mama previo (en los últimos cinco años)")
+data <- categorizar(data, "contraceptive_kind", 
+                    c("Ninguno", "Anticonceptivo oral", "Inyección trimestral", "Anillo vaginal", 
+                      "Parche anticonceptivo", "DIU hormonal", "Implante anticonceptivo", 
+                      "DIU de cobre", "Otro"), 
+                    descripcion = "Método anticonceptivo utilizado")
+data <- categorizar(data, "pre_op", 
+                    c("No", "Si"), 
+                    descripcion = "Cirugía previa en las mamas")
+data <- categorizar(data, "cancer_kind_family_1", 
+                    c("No", "Si"), 
+                    descripcion = "Historia familiar de cáncer de mama o de ovario")
+data <- categorizar(data, "breastcancer_first", 
+                    c("No", "Si"), 
+                    descripcion = "Primera enfermedad mamaria del paciente")
+data <- categorizar(data, "lateral", 
+                    c("Mama izquierda", "Mama derecha", "Ambas mamas"), 
+                    descripcion = "Lado afectado por la enfermedad mamaria")
+data <- categorizar(data, "histotype", 
+                    c("Tumor primario", "Carcinoma ductal invasivo", "Carcinoma lobular invasivo", "Otro", "Desconocido"), 
+                    descripcion = "Tipo histológico del cáncer de mama")
+data <- categorizar(data, "gradeinv", 
+                    c("Grado 1", "Grado 2", "Grado 3", "No especificado"), 
+                    descripcion = "Grado de invasión del tumor")
+data <- categorizar(data, "erstatus", 
+                    c("Negativo", "Positivo", "No realizado", "Desconocido"), 
+                    descripcion = "Estado del receptor de estrógenos del tumor")
+data <- categorizar(data, "prstatus", 
+                    c("Negativo", "Positivo", "No realizado", "Desconocido"), 
+                    descripcion = "Estado del receptor de progesterona del tumor")
+data <- categorizar(data, "her2status", 
+                    c("Negativo", "Positivo", "Ambiguo", "No realizado", "Desconocido"), 
+                    descripcion = "Estado del receptor HER2 del tumor")
+
+```
+```{r funcion_limpiar_NAs, echo=FALSE, include=FALSE}
+limpiar_na <- function(data, umbral_filas, umbral_columnas) {
+  # Eliminar filas con demasiados NAs
+  proporcion_na_filas <- rowSums(is.na(data)) / ncol(data)
+  filas_a_eliminar <- which(proporcion_na_filas > umbral_filas)
+  data_limpiada_filas <- data[-filas_a_eliminar, ]
+  
+  # Eliminar columnas con demasiados NAs
+  proporcion_na_columnas <- colSums(is.na(data_limpiada_filas)) / nrow(data_limpiada_filas)
+  columnas_a_eliminar <- names(proporcion_na_columnas[proporcion_na_columnas > umbral_columnas])
+  data_limpiada_final <- data_limpiada_filas[, !(colnames(data_limpiada_filas) %in% columnas_a_eliminar)]
+  
+  # Devolver datos limpios y nombres de las filas y columnas eliminadas
+  return(list(
+    data_limpiada = data_limpiada_final,
+    filas_eliminadas = rownames(data)[filas_a_eliminar],
+    columnas_eliminadas = columnas_a_eliminar
+  ))
+}
+
+```
+
+```{r limpieza_de_datos, echo=FALSE, include=FALSE}
+# Reemplazar los datos de 888 y 999
+data <- reemplazar(data)
+
+# Limpiar columnas con demasiados NAs, usando un umbral del 20%
+resultado.na <- limpiar_na(data, umbral_filas = 0.2, umbral_columnas = 0.2)
+data <- resultado.na$data_limpiada
+
+# Guardar en una variable las columnas eliminadas
+columnas.eliminadas <- resultado.na$columnas_eliminadas
+```
+
+```{r separación_de_variables, echo=FALSE, include=FALSE}
+# Variables dependientes (NUMERICAS)
+variables.dependientes <- c(
+  "ql", "pf", "rf", "ef", "cf", "sf", "fa", "nv", "pa", 
+  "dy", "sl", "ap", "co", "di", "fi", "brst", "brbi", 
+  "brbs", "flq", "brfu", "brsee", "brsef", "slq", "bras", 
+  "brhl")
+
+
+variables.dependientes.descripciones <- attr(variables.dependientes, "descripcion") <- c(
+  "Estado global de salud/Calidad de vida (QoL)",
+  "Funcionamiento físico",
+  "Funcionamiento de roles",
+  "Funcionamiento emocional",
+  "Funcionamiento cognitivo",
+  "Funcionamiento social",
+  "Fatiga",
+  "Náuseas y vómitos",
+  "Dolor",
+  "Disnea",
+  "Insomnio",
+  "Pérdida de apetito",
+  "Estreñimiento",
+  "Diarrea",
+  "Dificultades financieras",
+  "Síntomas en el brazo",
+  "Imagen corporal",
+  "Síntomas en el seno",
+  "Escala funcional",
+  "Perspectiva futura",
+  "Disfrute sexual",
+  "Funcionamiento sexual",
+  "Escala de síntomas",
+  "Efectos secundarios de la terapia sistémica",
+  "Molestia por la pérdida de cabello"
+)
+
+# variables.dependientes.descripciones[which(variables.dependientes == "slq")]
+
+# Variables independientes (CATEGORICAS)
+variables.nominales <- c(
+  "maritial_status", "education", "alcohol", "smokingstatus", "bust", 
+  "cupsize", "menstruation_firsttime_age", "menopause_yn", "birth_number", 
+  "pregnancy_number", "comorb_none", "comorb_heart", "comorb_hypertension", 
+  "comorb_paod", "comorb_lung", "comorb_diabetes", "comorb_kidneys", 
+  "comorb_liver", "comorb_stroke", "comorb_neurological", "comorb_cancerlast5years", 
+  "comorb_depression", "comorb_gastrointestinal", "comorb_endometriosis", 
+  "comorb_arthritis", "comorb_incontinence", "comorb_uti", "cancer_breast", 
+  "contraceptive_kind", "pre_op", "cancer_kind_family_1", "breastcancer_first", 
+  "diagnosis", "lateral", "histotype", "gradeinv", "erstatus", "prstatus", 
+  "her2status"
+)
+
+# Variables independientes (NUMERICAS)
+variables.numericas <- c(
+  "age", "weight", "height", "bmi"
+)
+
+
+variables.numericas.descripciones <- attr(variables.numericas, "descripcion") <- c(
+  "Edad al momento del registro en años",
+  "Peso en kilogramos",
+  "Altura en centímetros",
+  "Índice de masa corporal (IMC) en kg/m²"
+)
+```
+```{r funcion_analisis_demografico, echo=FALSE, include=FALSE}
+analisis_demografico <- function(data) {
+  demografia <- list(
+    resumen_age = summary(data$age),
+    resumen_marital= table(data$maritial_status),
+    resumen_education = table(data$education),
+    resumen_alcohol = table(data$alcohol),
+    resumen_smoking = table(data$smokingstatus)
+  )
+# Gráficas
+  plot_age <- ggplot(data, aes(x = age)) +
+    geom_histogram(bins = 20, color = "black", fill = "lightblue") +
+    labs(title = "Distribución de la edad", x = variables.numericas.descripciones[1], y = "Frecuencia")
+  
+  plot_marital <- ggplot(data, aes(x = maritial_status)) +
+    geom_bar(fill = "lightgreen") +
+    labs(title = "Distribución según estado civil", x = attr(data[["maritial_status"]], "descripcion"), y = "Frecuencia")
+  
+  plot_education <- ggplot(data, aes(x = education)) +
+    geom_bar(fill = "lightpink") +
+    labs(title = "Distribución según nivel educativo", x = attr(data[["education"]], "descripcion"), y = "Frecuencia")
+  
+  plot_alcohol <- ggplot(data, aes(x = alcohol)) +
+    geom_bar(fill = "lightgray") +
+    labs(title = "Distribución según consumo de alcohol", x = attr(data[["alcohol"]], "descripcion"), y = "Frecuencia")
+  
+  plot_smoking <- ggplot(data, aes(x = smokingstatus)) +
+    geom_bar(fill = "plum2") +
+    labs(title = "Distribución según tabaquismo", x = attr(data[["smokingstatus"]], "descripcion"), y = "Frecuencia")
+  
+  # Combina gráficos en una lista
+  plots <- list(
+    plot_age,
+    plot_marital,
+    plot_education,
+    plot_alcohol,
+    plot_smoking
+  )
+  
+  return(list(demografia = demografia, plots = plots))
+}
+```
+```{r funcion_poblacion_por_diagnostico, echo=FALSE, include=FALSE}
+plot_variable_diagnostico <- function(data, variable_diagnostico) {
+  # Check if the variable exists in the data
+  if (!(variable_diagnostico %in% colnames(data))) {
+    stop("La variable especificada no está presente en el conjunto de datos.")
+  }
+  
+  # Create a frequency table
+  freq_table <- data %>%
+    count(!!sym(variable_diagnostico))
+  
+  # Create a bar plot
+  plot <- freq_table %>%
+    ggplot(aes_string(x = variable_diagnostico, y = "n", fill = variable_diagnostico)) +
+    geom_bar(stat = "identity") +
+    labs(title = paste("Frequency of", variable_diagnostico), x = variable_diagnostico, y = "Frequency") +
+    theme(legend.position = "none") +
+    scale_fill_brewer(palette = "Set2")
+  
+  # Return the plot
+  return(plot)
+}
+
+# Calculate counts for each level
+level1_count <- sum(data$diagnosis == levels(data$diagnosis)[1])
+level2_count <- sum(data$diagnosis == levels(data$diagnosis)[2])
+level3_count <- sum(data$diagnosis == levels(data$diagnosis)[3])
+level4_count <- sum(data$diagnosis == levels(data$diagnosis)[4])
+
+# Create a sentence
+texto.poblacion.diagnostico <- paste("En la base de datos tenemos", level1_count, "casos de", levels(data$diagnosis)[1], ",", 
+                   level2_count, "casos de", levels(data$diagnosis)[2], ",", 
+                   level3_count, "casos de", levels(data$diagnosis)[3], "y", 
+                   level4_count, "casos de", levels(data$diagnosis)[4])
+```
+```{r funcion_base_por_diagnostico, echo=FALSE, include=FALSE}
+explorar_por_diagnostico <- function(data, variable_diagnostico, base) {
+  # Verificar qué variables están presentes en los datos
+  variables_presentes <- base[base %in% colnames(data)]
+  
+  if (length(variables_presentes) == 0) {
+    stop("Ninguna de las variables especificadas está presente en el conjunto de datos.")
+  }
+  
+  # Agrupar por diagnóstico y calcular estadísticas resumen para las variables presentes
+  estadisticas_resumen <- data %>%
+    group_by(across(all_of(variable_diagnostico))) %>%
+    summarise(
+      across(all_of(variables_presentes), 
+             list(n = ~ sum(!is.na(.x)),
+                  media = ~ mean(.x, na.rm = TRUE),
+                  mediana = ~ median(.x, na.rm = TRUE),
+                  desviacion = ~ sd(.x, na.rm = TRUE)),
+             .names = "{fn}")
+    )
+  
+  # Devolver las estadísticas resumen
+  return(estadisticas_resumen)
+}
+```
+```{r funcion_plot_base_por_diagnostico, echo=FALSE, include=FALSE}
+explorar_por_cancer_grafico <- function(data, variable_diagnostico, base) {
+  # Crear un gráfico que muestra la calidad de vida por diagnóstico
+  ggplot(data, aes(x = get(variable_diagnostico), y = get(base), fill = get(variable_diagnostico))) + 
+    geom_boxplot() +
+    labs(title = paste("Distribución de", base, "por", variable_diagnostico),
+         x = variable_diagnostico,
+         y = base) +
+    scale_fill_brewer(palette = "Set2") +  
+    theme_minimal() +
+    theme(legend.position = "none")
+}
+```
+
+```{r exploracion, echo=FALSE, include=FALSE}
+# Realizar el análisis demográfico
+datos.demograficos <- analisis_demografico(data)
+
+# Guardar los resultados en variables que luego se puedan usar en el texto
+age.demo <- datos.demograficos$demografia[1] 
+marital.demo <- datos.demograficos$demografia[2] 
+education.demo <- datos.demograficos$demografia[3]
+alcohol.demo <- datos.demograficos$demografia[4]
+smoking.demo <- datos.demograficos$demografia[5]
+
+age.demo.min <- as.numeric(age.demo$resumen_age[1])
+age.demo.1q <- as.numeric(age.demo$resumen_age[2])
+age.demo.median <- as.numeric(age.demo$resumen_age[3])
+age.demo.mean <- as.numeric(age.demo$resumen_age[4])
+age.demo.3q <- as.numeric(age.demo$resumen_age[5])
+age.demo.max <- as.numeric(age.demo$resumen_age[6])
+
+marital.demo.1 <- as.numeric(marital.demo$resumen_marital[1])
+marital.demo.2 <- as.numeric(marital.demo$resumen_marital[2])
+marital.demo.3 <- as.numeric(marital.demo$resumen_marital[3])
+marital.demo.4 <- as.numeric(marital.demo$resumen_marital[4])
+
+education.demo.1 <- as.numeric(education.demo$resumen_education[1])
+education.demo.2 <- as.numeric(education.demo$resumen_education[2])
+education.demo.3 <- as.numeric(education.demo$resumen_education[3])
+
+alcohol.demo.1 <- as.numeric(alcohol.demo$resumen_alcohol[1])
+alcohol.demo.2 <- as.numeric(alcohol.demo$resumen_alcohol[2])
+alcohol.demo.3 <- as.numeric(alcohol.demo$resumen_alcohol[3])
+alcohol.demo.4 <- as.numeric(alcohol.demo$resumen_alcohol[4])
+
+smoking.demo.1 <- as.numeric(smoking.demo$resumen_smoking[1])
+smoking.demo.2 <- as.numeric(smoking.demo$resumen_smoking[2])
+smoking.demo.3 <- as.numeric(smoking.demo$resumen_smoking[3])
+
+
+# Realizar la visualización de la población en subgrupos diagnósticos
+plot.diagnostico <- plot_variable_diagnostico(data, "diagnosis")
+
+# Realizar el resumen de la variable base en los subgrupos diagnósticos
+estadisticas.diagnostico.resumen <- explorar_por_diagnostico(data, "diagnosis", base)
+
+# Realizar la visualización de la variable base en los subgrupos diagnósticos
+plot.base.diagnostico <- explorar_por_cancer_grafico(data, "diagnosis", base)
+
+# Realizar las visualizaciones de las variables a explorar en los subgrupos diagnósticos
+plot.exploracion.diagnostico.1 <- explorar_por_cancer_grafico(data, variable.exploracion.1, base)
+plot.exploracion.diagnostico.2 <- explorar_por_cancer_grafico(data, variable.exploracion.2, base)
+plot.exploracion.diagnostico.3 <- explorar_por_cancer_grafico(data, variable.exploracion.3, base)
+
+```
+
+```{r funcion_calcular_correlaciones, echo=FALSE, include=FALSE}
+calcular_correlaciones <- function(data, variables_numericas, base) {
+  # Subconjunto de datos con variables numéricas
+  datos_numericos <- data[, variables_numericas]
+  
+  # Asegurar que la variable dependiente esté incluida
+  if (!(base %in% variables_numericas)) {
+    datos_numericos[[base]] <- data[[base]]
+  }
+  
+  # Calcular las correlaciones con la variable dependiente
+  resultados_correlacion <- cor(datos_numericos, use = "complete.obs") # Excluir NAs
+  correlacion_base <- resultados_correlacion[base, ] # Extraer la correlación para la variable dependiente
+  
+  # Crear un dataframe con las correlaciones
+  df_correlacion <- data.frame(Variable = names(correlacion_base), Correlacion = correlacion_base)
+  df_correlacion <- df_correlacion[order(-abs(df_correlacion$Correlacion)), ] 
+  
+  # Reshape para el mapa de calor
+  matriz_correlacion <- reshape2::melt(resultados_correlacion)
+  colnames(matriz_correlacion) <- c("Variable1", "Variable2", "Correlacion")
+  
+  # Crear el mapa de calor
+  heatmap <- ggplot(matriz_correlacion, aes(x = Variable1, y = Variable2, fill = Correlacion)) +
+    geom_tile() +
+    scale_fill_gradient2(low = "blue", high = "red", mid = "white", midpoint = 0) +
+    theme_minimal() +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+    labs(
+      title = paste("Mapa de calor de correlaciones con", base),
+      x = "Variables", 
+      y = "Variables", 
+      fill = "Correlación"
+    )
+  
+  # Retornar los resultados en una lista
+  return(list(correlaciones = df_correlacion, heatmap = heatmap))
+}
+```
+```{r funcion_analizar_correlaciones, echo=FALSE, include=FALSE}
+analizar_correlaciones <- function(base, df_correlacion, umbral_fuerte, umbral_debil) {
+  # Filtrar la autocorrelación de la variable base
+  df_correlacion <- df_correlacion[df_correlacion$Variable != base, ]
+  
+  # Categorizar las correlaciones
+  correlaciones_fuertes <- df_correlacion[abs(df_correlacion$Correlacion) >= umbral_fuerte, ]
+  correlaciones_debiles <- df_correlacion[abs(df_correlacion$Correlacion) < umbral_debil, ]
+  
+  # Determinar el caso
+  if (nrow(correlaciones_fuertes) == 0) {
+    resultado <- "todas las correlaciones son débiles"
+  } else if (nrow(correlaciones_fuertes) == nrow(df_correlacion)) {
+    resultado <- "todas las correlaciones son fuertes"
+  } else {
+    vars_fuertes <- paste0(
+      correlaciones_fuertes$Variable, 
+      " (", round(correlaciones_fuertes$Correlacion, 3), ")", 
+      collapse = ", "
+    )
+    resultado <- paste(
+      "algunas correlaciones son fuertes, incluyendo:", vars_fuertes
+    )
+  }
+  
+  return(resultado)
+}
+```
+```{r funcion_evaluar_supuestos, echo=FALSE, include=FALSE}
+evaluar_supuestos <- function(data, variables_nominales, base) {
+# Evaluar los supuestos por cada variable nominal
+for (var in variables.nominales) {
+  if (var %in% colnames(data)) {
+    # Verificar si existen grupos (niveles de la variable 'var')
+    if (length(unique(data[[var]])) > 1) {
+      
+      # Crear un listado con los tamaños de cada grupo
+      grupos <- split(data[[base]], data[[var]])
+
+      # Eliminar NA en los grupos (si existen)
+      grupos <- lapply(grupos, function(grupo) na.omit(grupo))
+
+      # Evaluar normalidad (Shapiro-Wilk) para cada grupo
+      normalidad_resultados <- sapply(grupos, function(grupo) {
+        if (length(grupo) >= 3) {
+          test <- shapiro.test(grupo)
+          return(test$p.value)
+        } else {
+          return(NA)  # Si el grupo tiene menos de 3 observaciones, devolver NA
+        }
+      })
+      
+      # Almacenar si los p-valores son mayores a 0.05 (hipótesis nula: distribución normal)
+      normalidad <- all(normalidad_resultados[!is.na(normalidad_resultados)] > 0.05)
+      assign(paste(var, "normalidad", sep = "."), normalidad, envir = .GlobalEnv)
+
+      # Evaluar homocedasticidad con el test de Levene
+      # Asegurarse de que 'var' es tratado como factor (es nominal) y 'base' es cuantitativa
+      homocedasticidad <- tryCatch({
+        # Usamos as.formula para construir la fórmula dinámicamente
+        formula <- as.formula(paste(base, "~ factor(", var, ")"))
+        leveneTest(formula, data = data)
+      }, error = function(e) NULL)  # En caso de error, devuelve NULL
+
+      # Verificar si el resultado del test de Levene es válido
+      if (!is.null(homocedasticidad)) {
+        homocedasticidad_resultado <- homocedasticidad$p.value > 0.05  # p-value > 0.05: homocedasticidad
+        assign(paste(var, "homocedasticidad", sep = "."), homocedasticidad_resultado, envir = .GlobalEnv)
+      } else {
+        assign(paste(var, "homocedasticidad", sep = "."), NA, envir = .GlobalEnv)  # Si no se puede calcular, almacena NA
+      }
+      
+    } else {
+      # Si no hay suficientes grupos, almacena NA para homocedasticidad
+      assign(paste(var, "homocedasticidad", sep = "."), NA, envir = .GlobalEnv)
+    }
+  }
+}
+}
+
+# Ejecutar la función para normalidad y homocedasticidad
+evaluar_supuestos(data, variables.nominales, base)
+```
+```{r funcion_realizar_pruebas, echo=FALSE, include=FALSE}
+realizar_pruebas <- function(data, nominal_vars, base) {
+
+  # Lista donde almacenaremos los resultados
+  resultados <- list()
+
+  # Recorremos cada variable nominal
+  for (var in nominal_vars) {
+
+    # Verificar si la variable nominal sigue en el dataframe
+    if (!(var %in% names(data))) {
+      next  # Si no está, pasamos a la siguiente variable
+    }
+
+    # Evaluar los supuestos
+    normalidad <- get(paste0(var, ".normalidad"))  # Normalidad ya evaluada (TRUE/FALSE)
+    homocedasticidad <- get(paste0(var, ".homocedasticidad"))[1]  # Homocedasticidad ya evaluada (TRUE/FALSE)
+
+    # Resultado que se almacenará
+    prueba_resultado <- list()
+    formula <- as.formula(paste("data[[base]] ~ factor(data$", var, ")"))
+
+    # Evaluamos el tipo de prueba según los supuestos
+    if (normalidad & homocedasticidad) {
+      # ANOVA de una vía
+      prueba_resultado$anova <- aov(formula, data = data)
+      prueba_resultado$tipo_prueba <- "ANOVA"
+
+    } else if (normalidad & !homocedasticidad) {
+      # Prueba de Welch
+      prueba_resultado$anova <- oneway.test(formula, data = data)
+      prueba_resultado$tipo_prueba <- "Prueba de Welch"
+
+    } else if (!normalidad) { 
+      # Test de Kruskal-Wallis
+      prueba_resultado$anova <- kruskal.test(formula, data = data)
+      prueba_resultado$tipo_prueba <- "Kruskal-Wallis"
+    } 
+    # Almacenar los resultados en la lista
+    resultados[[var]] <- prueba_resultado
+  }
+
+  # Devolver la lista con todos los resultados
+  return(resultados)
+}
+
+# Realizar las pruebas estadisticas (ANOVA, Welch y Kruskal-Wallis)
+resultados <- realizar_pruebas(data, variables.nominales, base)
+
+# Crear un vector vacío para almacenar las variables significativas
+variables.significativas <- c()
+
+# Bucle para recorrer cada variable nominal y comprobar el p-valor
+for (var in variables.nominales) {
+  # Crear la fórmula dinámica para acceder al p-valor dentro de anova
+  formula.pvalue <- paste0("resultados$", var, "$anova$p.value")
+
+  # Obtener el p-valor de la variable usando eval(parse())
+  p_value <- eval(parse(text = formula.pvalue))
+
+  # Si el p-valor es menor a 0.05, agregar la variable a la lista
+  if (!is.null(p_value) && p_value < 0.05) {
+    variables.significativas <- c(variables.significativas, var)
+  }
+}
+
+# Crear el texto final
+if (length(variables.significativas) > 0) {
+  texto.resultados <- paste("Después de realizar diversas pruebas estadísticas para comparar diferentes grupos, podemos inferir que las variables",
+                            paste(variables.significativas, collapse = ", "),
+                            "pueden afectar significativamente a", base, '.')
+} else {
+  texto.resultados <- "No se encontraron variables con un p-valor significativo."
+}
+
+# Mostrar el resultado
+texto.resultados
+```
+```{r posthoc_significativas, echo=FALSE, include=FALSE}
+realizar_posthoc_significativas <- function(resultados, data, variables_nominales, base) {
+  
+  # Crear un vector vacío para almacenar las variables significativas
+  variables.significativas <- c()
+
+  # Identificar las variables significativas
+  for (var in variables_nominales) {
+    # Crear la fórmula dinámica para acceder al p-valor dentro de anova
+    formula_pvalue <- paste0("resultados$", var, "$anova$p.value")
+    
+    # Obtener el p-valor de la variable usando eval(parse())
+    p_value <- eval(parse(text = formula_pvalue))
+    
+    # Si el p-valor es menor a 0.05, agregar la variable a la lista
+    if (!is.null(p_value) && p_value < 0.05) {
+      variables.significativas <- c(variables.significativas, var)
+    }
+  }
+
+  # Lista donde almacenaremos los resultados post hoc
+  posthoc_results <- list()
+
+  # Realizar pruebas post hoc solo para las variables significativas
+  for (var in variables.significativas) {
+    
+    # Obtenemos el resultado de la prueba y el tipo de prueba
+    prueba_resultado <- resultados[[var]]
+    tipo_prueba <- prueba_resultado$tipo_prueba
+
+    # Comprobamos que exista un resultado ANOVA
+    if ("anova" %in% names(prueba_resultado)) {
+      aov_result <- prueba_resultado$anova
+
+      # Realizamos la prueba post hoc según el tipo de prueba
+      if (tipo_prueba == "ANOVA") {
+        # Tukey HSD para ANOVA
+        posthoc_results[[var]] <- TukeyHSD(aov_result)
+
+      } else if (tipo_prueba == "Prueba de Welch") {
+        # Prueba de Welch, usamos t-test de pares
+        posthoc_results[[var]] <- pairwise.t.test(aov_result$residuals, 
+                                                  g = data[[var]], 
+                                                  p.adjust.method = "bonferroni")
+
+      } else if (tipo_prueba == "Kruskal-Wallis") {
+        # Verificar si el resultado es numérico y la variable de grupo es un factor
+        numeric_data <- data[[base]]  # Dependent variable (base)
+        group_var <- factor(data[[var]])  # Grouping variable as factor
+
+        # Aplicar la prueba de Wilcoxon de pares
+        posthoc_results[[var]] <- pairwise.wilcox.test(numeric_data, 
+                                                       g = group_var, 
+                                                       p.adjust.method = "bonferroni", 
+                                                       warn = FALSE)
+      }
+    } else {
+      posthoc_results[[var]] <- "No ANOVA results available"
+    }
+  }
+
+  # Devolver la lista de resultados post hoc
+  return(posthoc_results)
+}
+
+# Realizar las pruebas post hoc para determinar que niveles son diferentes
+posthoc.resultados <- realizar_posthoc_significativas(resultados, data, variables.nominales, base)
+```
+```{r posthoc_interpretacion, echo=FALSE, include=FALSE}
+interpretar_posthoc <- function(posthoc.resultados) {
+  
+  # Lista para almacenar interpretaciones de cada variable
+  interpretaciones <- list()
+  
+  # Recorremos cada variable en los resultados post hoc
+  for (var in names(posthoc.resultados)) {
+    
+    # Obtener los resultados post hoc para la variable actual
+    resultado_posthoc <- posthoc.resultados[[var]]
+    
+    # Verificar si los resultados contienen una matriz de p-valores
+    if (!is.null(resultado_posthoc) && "p.value" %in% names(resultado_posthoc)) {
+      
+      # Extraer la matriz de p-valores
+      matriz_pvalores <- resultado_posthoc$p.value
+      
+      # Crear un vector para almacenar las interpretaciones de esta variable
+      interpretacion_var <- c()
+      
+      # Recorrer la matriz de p-valores
+      for (i in rownames(matriz_pvalores)) {
+        for (j in colnames(matriz_pvalores)) {
+          
+          # Obtener el p-valor de la comparación
+          p_value <- matriz_pvalores[i, j]
+          
+          # Verificar si el p-valor es significativo
+          if (!is.na(p_value) && p_value < 0.05) {
+            # Crear una interpretación para esta comparación
+            interpretacion <- paste0(
+              "La diferencia entre ", i, " y ", j, 
+              " es significativa (p = ", round(p_value, 4), ")."
+            )
+            # Agregar la interpretación al vector
+            interpretacion_var <- c(interpretacion_var, interpretacion)
+          }
+        }
+      }
+      
+      # Guardar las interpretaciones de esta variable en la lista
+      interpretaciones[[var]] <- interpretacion_var
+      
+    } else {
+      # Si no hay matriz de p-valores, agregar un mensaje
+      interpretaciones[[var]] <- "No se encontraron resultados post hoc significativos."
+    }
+  }
+  
+  # Devolver las interpretaciones
+  return(interpretaciones)
+}
+
+# Supongamos que tienes resultados post hoc almacenados en posthoc.resultados
+interpretaciones <- interpretar_posthoc(posthoc.resultados)
+
+# Crear un vector para almacenar las interpretaciones en formato texto
+texto.interpretaciones <- c()
+
+# Generar las interpretaciones como texto
+for (var in names(interpretaciones)) {
+  # Escapar caracteres especiales de LaTeX (como el guion bajo "_")
+  var_latex <- gsub("_", "\\\\_", var)
+  
+  # Construir el texto para cada variable
+  texto_variable <- paste0(
+    "\\textbf{Variable: ", var_latex, "}\\\n",
+    paste(interpretaciones[[var]], collapse = "\\\n"), "\\\n"
+  )
+
+  
+  # Agregar el texto al vector
+  texto.interpretaciones <- c(texto.interpretaciones, texto_variable)
+}
+texto.interpretaciones <- paste(texto.interpretaciones, collapse = "")
+texto.interpretaciones
+```
+
+
+
+```{r analisis, echo=FALSE, include=FALSE}
+# Crear el analisis de correlaciones
+correlaciones.resultado <- calcular_correlaciones(data, variables.numericas, base)
+
+# Crear texto que analiza las correlaciones
+texto.analisis.correlacion <- analizar_correlaciones(base, correlaciones.resultado$correlaciones, 0.7, 0.3)
+
+# Ejecutar la función para normalidad y homocedasticidad
+evaluar_supuestos(data, variables.nominales, base)
+
+# Realizar las pruebas estadisticas (ANOVA, Welch y Kruskal-Wallis)
+resultados <- realizar_pruebas(data, variables.nominales, base)
+
+# Realizar las pruebas post hoc para determinar que niveles son diferentes
+posthoc.resultados <- realizar_posthoc_significativas(resultados, data, variables.nominales, base)
+
+# Realizar la interpretacion de los post hocs
+interpretaciones <- interpretar_posthoc(posthoc.resultados)
+```
+
+# Introducción
+
+Este reporte analiza y explora datos sobre la calidad de vida de mujeres con enfermedades de la mama, evaluados mediante los cuestionarios de calidad de vida de la EORTC. En particular, se utilizan el EORTC-QLQ-C30, diseñado para cáncer en general, y el EORTC-QLQ-BR23, específico para cáncer de mama. El objetivo es identificar cómo factores demográficos, clínicos y de estilo de vida influyen en el bienestar de las pacientes.
+
+En este reporte, se examinan estos factores en relación con la variable *`r base`* del conjunto de datos contenido en el archivo *`r archivo`*, la cual corresponde a la "descripción".  El reporte se divide en dos secciones: una exploración de datos, que incluye estadísticas descriptivas y visualizaciones para ofrecer una visión general de la población, y un análisis estadístico que examina las relaciones entre estos factores y las métricas de calidad de vida.
+
+# Limpieza y validación
+
+Se eliminaron las filas (entradas) con más del 20% de valores faltantes (NAs) y las columnas (variables) con más del 20% de NAs para asegurar la calidad y confiabilidad de los datos. Esto para evitar que la presencia excesiva de datos faltantes pudiera distorsionar los análisis posteriores. Las variables eliminadas fueron: *`r columnas.eliminadas`*.
+
+# Exploración
+
+## Población por subgrupos diagnósticos
+Esta sección muestra de manera gráfica la cantidad de pacientes con cada diagnóstico. 
+
+`r texto.poblacion.diagnostico`. Esto se observa en la siguiente gráfica.
+
+```{r plot_diagnostico, echo=FALSE, fig.cap="Distribución de pacientes según diagnóstico.", fig.align = "center", out.width = "100%", out.height = "125%", fig.pos = "H"}
+plot.diagnostico
+```
+
+\newpage
+## Análisis demográfico
+
+Esta sección explora como estan distribuidos los datos sociodemográficos de las pacientes en la base de datos. Se analizan las distribuciones de edad (age), estado civil (marital_status), nivel educativo (education), consumo de alcohol (alcohol) y tabaquísmo (smokingstatus).
+
+### Edad al momento del registro
+
+Las **edades** de las participantes oscilan entre `r age.demo.min` y `r age.demo.max`, con un primer cuartil de `r age.demo.1q`, una mediana de `r round(age.demo.median, 2)`, una media de `r age.demo.mean` y un tercer cuartil de `r age.demo.3q`. La distribución se puede apreciar en la siguiente figura. 
+
+```{r plot_age, echo=FALSE, fig.cap="Distribución de las edades de las pacientes.", fig.align = "center", out.width = "100%", out.height = "125%", fig.pos = "H"}
+datos.demograficos$plots[[1]]
+```
+\newpage
+
+### Estado civil de las pacientes
+Los **estados civiles** de las participantes se distribuyen de la siguiente manera: `r marital.demo.1` "Soltera", `r marital.demo.2` "Casada/En una relación", `r marital.demo.3` "Divorciada/Separada", y `r marital.demo.4` "Viuda". 
+
+```{r plot_marital, echo=FALSE, fig.cap="Distribución de los estados civiles de las pacientes.", fig.align = "center", out.width = "100%", out.height = "125%", fig.pos = "H"}
+datos.demograficos$plots[[2]]
+```
+\newpage
+
+### Nivel educativo de las pacientes
+Los **niveles educativos** se distribuyen de la siguiente manera: `r education.demo.1` con educación "Bajo", `r education.demo.2` con educación "Medio", y `r education.demo.3` con educación "Alto". 
+
+```{r plot_education, echo=FALSE, fig.cap="Distribución de los niveles educativos de las pacientes.", fig.align = "center", out.width = "100%", out.height = "125%", fig.pos = "H"}
+datos.demograficos$plots[[3]]
+```
+\newpage
+
+### Consumo de alcohol de las pacientes
+La frecuencia de **consumo de alcohol** muestra que `r alcohol.demo.1` no consumen alcohol ("Ninguno"), `r alcohol.demo.2` lo hacen "Ocasionalmente", `r alcohol.demo.3` consumen "Semanalmente", y `r alcohol.demo.4` lo hacen "Diariamente". 
+
+```{r plot_alcohol, echo=FALSE, fig.cap="Distribución según el consumo de alcohol de las pacientes.", fig.align = "center", out.width = "100%", out.height = "125%", fig.pos = "H"}
+datos.demograficos$plots[[4]]
+```
+\newpage
+
+### Tabaquísmo
+
+En cuanto al **tabaquismo**, `r smoking.demo.1` nunca han fumado ("No"), `r smoking.demo.2` actualmente fuman ("Sí"), y `r smoking.demo.3` son exfumadoras ("Exfumador"). 
+
+```{r plot_smoking, echo=FALSE, fig.cap="Distribución del estado de tabaquismo de las pacientes.", fig.align = "center", out.width = "100%", out.height = "125%", fig.pos = "H"}
+datos.demograficos$plots[[5]]
+```
+
+
+
+## Exploración de la variable `r base` por subgrupos diagnósticos
+
+La siguiente tabla muestra el numero de pacientes (n), las medias, medianas y la desviación estándar de `r base` según el tipo de enfermedad.
+
+```{r tabla_estadisticas, echo=FALSE}
+knitr::kable(estadisticas.diagnostico.resumen, caption = paste("Estadísticas de ", base, "por diagnóstico"))
+```
+
+\newpage
+El siguiente gráfico muestra un gráfico de cajas de `r base` según el diagnóstico.
+
+```{r plot_base_diagnostico, echo=FALSE, fig.align = "center", out.width = "100%", out.height = "125%", fig.cap= paste("Distribución de ", base, "por diagnóstico"), fig.pos = "H"}
+plot.base.diagnostico
+```
+\newpage
+## Exploración de la relación de `r variable.exploracion.1`, `r variable.exploracion.2` y `r variable.exploracion.3` con `r base`
+
+En esta sección exploramos como `r base` cambia en subgrupos creados a partir de tres de las variables independientes categoricas. Estas variables son: `r variable.exploracion.1`, `r variable.exploracion.2` y `r variable.exploracion.3`. 
+
+**`r variable.exploracion.1`**
+
+```{r plot_exp_1_diagnostico, echo=FALSE, fig.align='center', fig.cap= gsub("_", "\\\\_", paste("Distribución de", base, "por", variable.exploracion.1)), out.width = "100%", out.height = "125%", fig.pos = "H"}
+plot.exploracion.diagnostico.1
+```
+\newpage
+**`r variable.exploracion.2`**
+
+```{r plot_exp_2_diagnostico, echo=FALSE, fig.align = "center", out.width = "100%", out.height = "125%", fig.cap= gsub("_", "\\\\_", paste("Distribución de", base, "por", variable.exploracion.2)), fig.pos = "H"}
+plot.exploracion.diagnostico.2
+```
+\newpage
+**`r variable.exploracion.3`**
+
+```{r plot_exp_3_diagnostico, echo=FALSE, fig.align = "center", out.width = "100%", out.height = "125%", fig.cap= gsub("_", "\\\\_", paste("Distribución de", base, "por", variable.exploracion.3)), fig.pos = "H"}
+plot.exploracion.diagnostico.3
+```
+
+# Análisis
+## Análisis de correlación
+En esta sección se realizo un análisis de correlación entre la variable `r base` y las variables independientes numéricas (`r variables.numericas`). 
+Las correlaciones son las siguientes:
+
+```{r tabla_correlaciones, echo=FALSE}
+knitr::kable(correlaciones.resultado$correlaciones, caption = paste("Correlaciones entre ", base, "y las variables numéricas"))
+```
+
+Considerando que las correlaciones fuertes son mayores a 0.7 y las débiles a 0.3 podemos encontrar la fuerza de la relación entre `r base` y las variables independientes numéricas. En este caso `r texto.analisis.correlacion`.
+
+## Análisis estadístico
+
+`r texto.resultados`
+
+`r texto.interpretaciones`
