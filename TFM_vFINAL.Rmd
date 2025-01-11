@@ -890,7 +890,7 @@ for (var in names(interpretaciones)) {
   # Agregar el texto al vector
   texto.interpretaciones <- c(texto.interpretaciones, texto_variable)
 }
-texto.interpretaciones <- paste(texto.interpretaciones, collapse = "")
+texto.interpretaciones <- paste(texto.interpretaciones, collapse = "\n")
 ```
 
 
